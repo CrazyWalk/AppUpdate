@@ -1,4 +1,4 @@
-package org.luyinbros.appupdate;
+package org.luyinbros.appupdate.test;
 
 import android.app.Application;
 import android.app.DownloadManager;
@@ -23,6 +23,13 @@ import android.support.annotation.Nullable;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.content.FileProvider;
 
+import org.luyinbros.appupdate.ApkManager;
+import org.luyinbros.appupdate.AppUpdateInfo;
+import org.luyinbros.appupdate.AppUpdateSession;
+import org.luyinbros.appupdate.DownloadApkInfo;
+import org.luyinbros.appupdate.OnAppVersionCheckListener;
+import org.luyinbros.appupdate.OnDownloadApkListener;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,22 +37,22 @@ import java.util.List;
 import io.reactivex.disposables.Disposable;
 
 
-public class AppUpdater {
-    private volatile static AppUpdater mInstance;
+public class OriginalAppUpdater {
+    private volatile static OriginalAppUpdater mInstance;
     private Application application;
     private ApkManager<DefaultAppUpdateInfo> mApkManager;
     private OnDownloadApkListener<DefaultAppUpdateInfo> mOnDownloadListener;
 
-    private AppUpdater(Application application) {
+    private OriginalAppUpdater(Application application) {
         this.application = application;
         mApkManager = new DefaultApkManager(application);
     }
 
-    public static AppUpdater getInstance(Context context) {
+    public static OriginalAppUpdater getInstance(Context context) {
         if (mInstance == null) {
-            synchronized (AppUpdater.class) {
+            synchronized (OriginalAppUpdater.class) {
                 if (mInstance==null){
-                    mInstance = new AppUpdater((Application) context.getApplicationContext());
+                    mInstance = new OriginalAppUpdater((Application) context.getApplicationContext());
                 }
             }
         }
@@ -168,11 +175,11 @@ public class AppUpdater {
     private static class CheckVersionLifecycleObserver implements LifecycleObserver {
         private LifecycleOwner mLifecycleOwner;
         private AppUpdateSession<DefaultAppUpdateInfo> mSession;
-        private AppUpdater mUpdater;
+        private OriginalAppUpdater mUpdater;
         private OnAppVersionCheckListener<DefaultAppUpdateInfo> mListener;
 
         private CheckVersionLifecycleObserver(LifecycleOwner lifecycleOwner,
-                                              AppUpdater updater,
+                                              OriginalAppUpdater updater,
                                               OnAppVersionCheckListener<DefaultAppUpdateInfo> listener) {
             this.mLifecycleOwner = lifecycleOwner;
             this.mUpdater = updater;
@@ -217,10 +224,10 @@ public class AppUpdater {
     private static class AutoCheckVersionLifecycleObserver implements LifecycleObserver {
         private LifecycleOwner mLifecycleOwner;
         private AppUpdateSession<DefaultAppUpdateInfo> mSession;
-        private AppUpdater mUpdater;
+        private OriginalAppUpdater mUpdater;
         private FragmentManager mFragmentManager;
 
-        private AutoCheckVersionLifecycleObserver(LifecycleOwner lifecycleOwner, AppUpdater updater, FragmentManager fragmentManager) {
+        private AutoCheckVersionLifecycleObserver(LifecycleOwner lifecycleOwner, OriginalAppUpdater updater, FragmentManager fragmentManager) {
             this.mLifecycleOwner = lifecycleOwner;
             lifecycleOwner.getLifecycle().addObserver(this);
             this.mUpdater = updater;
@@ -510,7 +517,7 @@ public class AppUpdater {
     }
 
     private static class DefaultAppUpdateSession implements AppUpdateSession<DefaultAppUpdateInfo> {
-        private AppUpdater mAppUpdater;
+        private OriginalAppUpdater mOriginalAppUpdater;
         private boolean isChecking;
         private Disposable mDisposable;
         private OnAppVersionCheckListener<DefaultAppUpdateInfo> mListener;
@@ -537,10 +544,10 @@ public class AppUpdater {
             }
         };
 
-        DefaultAppUpdateSession(AppUpdater appUpdater) {
-            this.mAppUpdater = appUpdater;
-            mAppUpdater.registerDownloadApkListener(mDownloadListener);
-          //  mRemoteAppRepository = RepositoryV2FactoryClient.getRemoteRepositoryFactory(appUpdater.application).appRepository();
+        DefaultAppUpdateSession(OriginalAppUpdater originalAppUpdater) {
+            this.mOriginalAppUpdater = originalAppUpdater;
+            mOriginalAppUpdater.registerDownloadApkListener(mDownloadListener);
+          //  mRemoteAppRepository = RepositoryV2FactoryClient.getRemoteRepositoryFactory(originalAppUpdater.application).appRepository();
         }
 
         @Override
@@ -548,11 +555,11 @@ public class AppUpdater {
             if (!isChecking) {
                 mListener = listener;
                 isChecking = true;
-                if (mAppUpdater.isDownloadingApk()) {
+                if (mOriginalAppUpdater.isDownloadingApk()) {
                     listener.onFailure(new IllegalStateException());
                     isChecking = false;
                 } else {
-//                    checkUpdateObservable(mRemoteAppRepository, mAppUpdater.application)
+//                    checkUpdateObservable(mRemoteAppRepository, mOriginalAppUpdater.application)
 //                            .subscribe(new Observer<DefaultAppUpdateInfo>() {
 //                                @Override
 //                                public void onSubscribe(Disposable d) {
@@ -590,7 +597,7 @@ public class AppUpdater {
 
         @Override
         public void destroy() {
-            mAppUpdater.unregisterDownloadApkListener(mDownloadListener);
+            mOriginalAppUpdater.unregisterDownloadApkListener(mDownloadListener);
             if (mDisposable != null) {
                 mDisposable.dispose();
             }
@@ -599,17 +606,17 @@ public class AppUpdater {
 
     }
 
-    public static class DefaultDownloadApkInfo implements DownloadApkInfo<AppUpdater.DefaultAppUpdateInfo> {
-        private AppUpdater.DefaultAppUpdateInfo defaultAppUpdateInfo;
+    public static class DefaultDownloadApkInfo implements DownloadApkInfo<OriginalAppUpdater.DefaultAppUpdateInfo> {
+        private OriginalAppUpdater.DefaultAppUpdateInfo defaultAppUpdateInfo;
         private File file;
 
-        public DefaultDownloadApkInfo(AppUpdater.DefaultAppUpdateInfo defaultAppUpdateInfo, File file) {
+        public DefaultDownloadApkInfo(OriginalAppUpdater.DefaultAppUpdateInfo defaultAppUpdateInfo, File file) {
             this.defaultAppUpdateInfo = defaultAppUpdateInfo;
             this.file = file;
         }
 
         @Override
-        public AppUpdater.DefaultAppUpdateInfo getUpdateInfo() {
+        public OriginalAppUpdater.DefaultAppUpdateInfo getUpdateInfo() {
             return defaultAppUpdateInfo;
         }
 

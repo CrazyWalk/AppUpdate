@@ -7,4 +7,9 @@ public interface AppUpdateInfo extends Parcelable {
     boolean isUpdate();
 
     boolean isForceUpdate();
+
+    String getApkUrl();
+
+    String getNewestVersion();
+
 }
