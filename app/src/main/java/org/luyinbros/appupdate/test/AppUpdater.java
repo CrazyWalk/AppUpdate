@@ -1,12 +1,14 @@
 package org.luyinbros.appupdate.test;
 
 import android.app.Application;
+import android.app.DownloadManager;
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Parcel;
 import android.support.annotation.Nullable;
 import android.support.v4.app.FragmentManager;
 
+import org.luyinbros.appupdate.ApkManager;
 import org.luyinbros.appupdate.AppUpdateDelegate;
 import org.luyinbros.appupdate.AppUpdateInfo;
 import org.luyinbros.appupdate.AppUpdateSession;
@@ -22,7 +24,7 @@ public class AppUpdater {
     private Application application;
     private AppUpdateDelegate<DefaultAppUpdateInfo, DefaultDownloadApkInfo> mDelegate;
 
-    private AppUpdater(Application application) {
+    private AppUpdater(final Application application) {
         this.application = application;
         mDelegate = new AppUpdateDelegate<DefaultAppUpdateInfo, DefaultDownloadApkInfo>(application) {
             @Override
@@ -36,6 +38,17 @@ public class AppUpdater {
                     @Override
                     public Observable<DefaultAppUpdateInfo> checkUpdateObservable() {
                         return Observable.just(new DefaultAppUpdateInfo());
+                    }
+                };
+            }
+
+            @Override
+            public ApkManager<DefaultAppUpdateInfo> getApkManager() {
+                return new DefaultApkManager<DefaultAppUpdateInfo,DefaultDownloadApkInfo>(application,mDelegate){
+                    @Override
+                    protected void configDownloadRequest(DownloadManager.Request request) {
+                        request.setTitle("app更新");
+                        request.setDescription("");
                     }
                 };
             }

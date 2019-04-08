@@ -102,7 +102,7 @@ public abstract class AppUpdateDelegate<UpdateInfo extends AppUpdateInfo,
         }
     }
 
-    private static class DefaultApkManager<UpdateInfo extends AppUpdateInfo,
+    public static class DefaultApkManager<UpdateInfo extends AppUpdateInfo,
             DownloadApkInfo extends org.luyinbros.appupdate.DownloadApkInfo<UpdateInfo>> implements ApkManager<UpdateInfo> {
         private Context mContext;
         private Long taskId;
@@ -138,7 +138,7 @@ public abstract class AppUpdateDelegate<UpdateInfo extends AppUpdateInfo,
             }
         };
 
-        DefaultApkManager(Context context, AppUpdateDelegate<UpdateInfo, DownloadApkInfo> delegate) {
+        public DefaultApkManager(Context context, AppUpdateDelegate<UpdateInfo, DownloadApkInfo> delegate) {
             this.mContext = context.getApplicationContext();
             this.mDelegate = delegate;
             mDownloadManager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
@@ -163,6 +163,7 @@ public abstract class AppUpdateDelegate<UpdateInfo extends AppUpdateInfo,
             return null;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         public void downloadApk(UpdateInfo info) {
             File targetFile = getDownloadApkFile(info);
@@ -173,12 +174,8 @@ public abstract class AppUpdateDelegate<UpdateInfo extends AppUpdateInfo,
                     if (taskId == null) {
                         Uri uri = Uri.parse(info.getApkUrl());
                         DownloadManager.Request request = new DownloadManager.Request(uri);
-                        // request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI);
-                        request.setTitle("音乐圣经");
-                        request.setDescription("");
+                        configDownloadRequest(request);
                         request.setMimeType("application/vnd.android.package-archive");
-                        request.setAllowedOverRoaming(false);
-                        request.setVisibleInDownloadsUi(true);
                         request.setDestinationInExternalFilesDir(mContext, Environment.DIRECTORY_DOWNLOADS, targetSubFile(info));
                         taskId = mDownloadManager.enqueue(request);
                         IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
@@ -192,6 +189,11 @@ public abstract class AppUpdateDelegate<UpdateInfo extends AppUpdateInfo,
                 }
 
             }
+        }
+
+        protected void configDownloadRequest(DownloadManager.Request request) {
+            request.setAllowedOverRoaming(false);
+            request.setVisibleInDownloadsUi(true);
         }
 
         @Override
