@@ -1,10 +1,12 @@
 package org.luyinbros.appupdate;
 
+import android.support.annotation.NonNull;
+
 public interface OnAppVersionCheckListener<T extends AppUpdateInfo> {
 
     void onStart();
 
-    void onSuccess(T data);
+    void onSuccess(@NonNull T data);
 
-    void onFailure(Throwable e);
+    void onFailure(@NonNull Throwable e);
 }
