@@ -36,19 +36,11 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
 
     @Override
     public boolean isAllowInstall() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            return mContext.getPackageManager().canRequestPackageInstalls();
-        } else {
-            return true;
-        }
+        return mApkManager.isAllowInstall();
     }
 
     public Intent getRequestInstallPermissionIntent() {
-        if (Build.VERSION.SDK_INT >= 26) {
-            return new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + mContext.getPackageName()));
-        } else {
-            return new Intent();
-        }
+        return mApkManager.getRequestInstallPermissionIntent();
     }
 
     @Override
@@ -88,8 +80,8 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
                     }
 
                     @Override
-                    public void onSuccess(@NonNull ApkManager<T> apkManager) {
-                        apkManager.installNewestApk();
+                    public void onSuccess(@NonNull ApkManager<T> apkManager, T appUpdateInfo) {
+                        apkManager.installApk(appUpdateInfo);
                         unregisterDownloadApkListener(mOnDownloadListener);
                         mOnDownloadListener = null;
                     }
@@ -201,9 +193,7 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
             mDownloadManager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
         }
 
-        @Nullable
-        @Override
-        public abstract File getNewestApkFile();
+
 
         @Nullable
         @Override
@@ -212,14 +202,6 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
         @Nullable
         @Override
         public abstract Uri getUriForFile(@Nullable File file);
-
-        @Override
-        public void installNewestApk() {
-            Intent intent = getInstallApkIntent(getNewestApkFile());
-            if (intent != null) {
-                mContext.startActivity(intent);
-            }
-        }
 
         @Override
         public void installApk(@NonNull T info) {
@@ -254,7 +236,7 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
         public void downloadApk(@NonNull T info) {
             File targetFile = getApkFile(info);
             if (targetFile != null) {
-                onSuccess();
+                onSuccess(info);
             } else {
                 try {
                     if (taskId == null) {
@@ -265,7 +247,7 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
                         taskId = mDownloadManager.enqueue(request);
                         IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
                         filter.addAction("android.intent.action.VIEW_DOWNLOADS");
-                        mContext.registerReceiver(new DefaultApkManager.DownloadReceiver(), filter);
+                        mContext.registerReceiver(new DefaultApkManager.DownloadReceiver(info), filter);
                         onProgress(0);
                         mHandler.postDelayed(mRunnable, 500);
                     }
@@ -276,9 +258,9 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
             }
         }
 
-        private void onSuccess() {
+        private void onSuccess(T appUpdateInfo) {
             for (OnDownloadApkListener<T> onDownloadApkListener : onDownloadApkListenerList) {
-                onDownloadApkListener.onSuccess(this);
+                onDownloadApkListener.onSuccess(this, appUpdateInfo);
             }
             taskId = null;
 
@@ -328,14 +310,37 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
             }
         }
 
+        @Override
+        public boolean isAllowInstall() {
+            if (Build.VERSION.SDK_INT >= 26) {
+                return mContext.getPackageManager().canRequestPackageInstalls();
+            } else {
+                return true;
+            }
+        }
+
+        @Override
+        public Intent getRequestInstallPermissionIntent() {
+            if (Build.VERSION.SDK_INT >= 26) {
+                return new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + mContext.getPackageName()));
+            } else {
+                return new Intent();
+            }
+        }
+
         public class DownloadReceiver extends BroadcastReceiver {
+            private AppUpdateInfo mAppUpdateInfo;
+
+            public DownloadReceiver(AppUpdateInfo appUpdateInfo) {
+                this.mAppUpdateInfo = appUpdateInfo;
+            }
 
             @Override
             public void onReceive(Context context, Intent intent) {
                 long reference = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
                 if (taskId == reference) {
                     try {
-                        onSuccess();
+                        onSuccess((T) mAppUpdateInfo);
                     } catch (Exception e) {
                         onFailure(e);
                     }

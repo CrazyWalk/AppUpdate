@@ -9,10 +9,6 @@ import java.io.File;
 
 public interface ApkManager<T extends AppUpdateInfo> {
 
-    @Nullable
-    File getNewestApkFile();
-
-    void installNewestApk();
 
     @Nullable
     File getApkFile(@NonNull T info);
@@ -32,4 +28,8 @@ public interface ApkManager<T extends AppUpdateInfo> {
     void registerDownloadApkListener(@Nullable OnDownloadApkListener<T> listener);
 
     void unregisterDownloadApkListener(@Nullable OnDownloadApkListener<T> listener);
+
+    boolean isAllowInstall();
+
+    Intent getRequestInstallPermissionIntent();
 }

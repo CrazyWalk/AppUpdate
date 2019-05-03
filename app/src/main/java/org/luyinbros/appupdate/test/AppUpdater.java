@@ -155,6 +155,7 @@ public class AppUpdater implements AppUpdateDelegate<AppUpdater.AppUpdateInfo> {
             return newestVersion;
         }
 
+        @NonNull
         public String getApkUrl() {
             return apkUrl;
         }
@@ -214,12 +215,6 @@ public class AppUpdater implements AppUpdateDelegate<AppUpdater.AppUpdateInfo> {
         private ApkManager(Context context) {
             super(context);
             mContext = context;
-        }
-
-        @Nullable
-        @Override
-        public File getNewestApkFile() {
-            return null;
         }
 
         @Nullable
