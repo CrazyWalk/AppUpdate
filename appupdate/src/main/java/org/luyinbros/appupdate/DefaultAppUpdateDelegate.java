@@ -1,6 +1,5 @@
 package org.luyinbros.appupdate;
 
-import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -23,17 +22,34 @@ import io.reactivex.Observer;
 import io.reactivex.disposables.Disposable;
 
 public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implements AppUpdateDelegate<T> {
+    private final ApkManager<T> mApkManager;
     private Context mContext;
-    private ApkManager<T> mApkManager;
+    private OnDownloadApkListener<T> mOnDownloadListener;
 
-    public DefaultAppUpdateDelegate(@NonNull Context context,
-                                    @NonNull ApkManager<T> mApkManager) {
-        this.mContext = context.getApplicationContext();
+    public DefaultAppUpdateDelegate(ApkManager<T> mApkManager, Context context) {
         this.mApkManager = mApkManager;
+        this.mContext = context.getApplicationContext();
     }
 
     @Override
     public abstract AppUpdateSession<T> openSession();
+
+    @Override
+    public boolean isAllowInstall() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            return mContext.getPackageManager().canRequestPackageInstalls();
+        } else {
+            return true;
+        }
+    }
+
+    public Intent getRequestInstallPermissionIntent() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            return new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + mContext.getPackageName()));
+        } else {
+            return new Intent();
+        }
+    }
 
     @Override
     public boolean isDownloadingApk() {
@@ -50,8 +66,49 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
         mApkManager.unregisterDownloadApkListener(listener);
     }
 
+    @Override
+    public void install(T info) {
+        mApkManager.installApk(info);
+    }
+
+    @Override
+    public abstract void showUpdateDialog(T updateInfo);
+
+    @Override
+    public void startUpdateInBackground(T updateInfo) {
+        File file = mApkManager.getApkFile(updateInfo);
+        if (file != null) {
+            install(updateInfo);
+        } else {
+            if (mOnDownloadListener == null) {
+                mOnDownloadListener = new OnDownloadApkListener<T>() {
+                    @Override
+                    public void onProgress(int progress) {
+
+                    }
+
+                    @Override
+                    public void onSuccess(@NonNull ApkManager<T> apkManager) {
+                        apkManager.installNewestApk();
+                        unregisterDownloadApkListener(mOnDownloadListener);
+                        mOnDownloadListener = null;
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+
+                    }
+                };
+                registerDownloadApkListener(mOnDownloadListener);
+                mApkManager.downloadApk(updateInfo);
+            }
+
+        }
+    }
+
+
     public abstract static class RxAppUpdateSession<T extends AppUpdateInfo> implements AppUpdateSession<T> {
-        private boolean isChecking;
+        private boolean isChecking = false;
         private Disposable mDisposable;
         private OnAppVersionCheckListener<T> mListener;
 
@@ -62,37 +119,36 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
 
         @Override
         public void checkVersion(@NonNull final OnAppVersionCheckListener<T> listener) {
-            if (!isChecking) {
-                mListener = listener;
-                isChecking = true;
-                checkUpdateObservable()
-                        .subscribe(new Observer<T>() {
-                            @Override
-                            public void onSubscribe(Disposable d) {
-                                mDisposable = d;
-                                listener.onStart();
-                            }
+            destroy();
+            mListener = listener;
+            checkUpdateObservable()
+                    .subscribe(new Observer<T>() {
+                        @Override
+                        public void onSubscribe(Disposable d) {
+                            mDisposable = d;
+                            isChecking = true;
+                            listener.onStart();
+                        }
 
-                            @Override
-                            public void onNext(T info) {
-                                listener.onSuccess(info);
-                                isChecking = false;
-                                mDisposable = null;
-                            }
+                        @Override
+                        public void onNext(T info) {
+                            listener.onSuccess(info);
+                            isChecking = false;
+                            mDisposable = null;
+                        }
 
-                            @Override
-                            public void onError(Throwable e) {
-                                listener.onFailure(e);
-                                isChecking = false;
-                                mDisposable = null;
-                            }
+                        @Override
+                        public void onError(Throwable e) {
+                            listener.onFailure(e);
+                            isChecking = false;
+                            mDisposable = null;
+                        }
 
-                            @Override
-                            public void onComplete() {
+                        @Override
+                        public void onComplete() {
 
-                            }
-                        });
-            }
+                        }
+                    });
         }
 
         public abstract Observable<T> checkUpdateObservable();
@@ -102,6 +158,7 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
             if (mDisposable != null) {
                 mDisposable.dispose();
             }
+            isChecking = false;
         }
     }
 
@@ -141,25 +198,7 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
 
         public DefaultApkManager(Context context) {
             this.mContext = context;
-        }
-
-        @Override
-        public void requestInstallPermission(@NonNull Activity activity, int requestCode) {
-            if (Build.VERSION.SDK_INT >= 26) {
-                Uri packageURI = Uri.parse("package:" + activity.getPackageName());
-                Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, packageURI);
-                activity.startActivityForResult(intent, requestCode);
-            }
-        }
-
-        @Override
-        public boolean hasInstallPermission() {
-            if (Build.VERSION.SDK_INT >= 26) {
-                return mContext.getPackageManager().canRequestPackageInstalls();
-            } else {
-                return true;
-            }
-
+            mDownloadManager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
         }
 
         @Nullable
@@ -174,13 +213,41 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
         @Override
         public abstract Uri getUriForFile(@Nullable File file);
 
-        protected void configDownloadRequest(@NonNull DownloadManager.Request request) {
-            // request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI);
-//            request.setTitle("音乐圣经");
-//            request.setDescription("");
-//            request.setAllowedOverRoaming(false);
-//            request.setVisibleInDownloadsUi(true);
-//            request.setDestinationInExternalFilesDir(mContext, Environment.DIRECTORY_DOWNLOADS, targetSubFile(info));
+        @Override
+        public void installNewestApk() {
+            Intent intent = getInstallApkIntent(getNewestApkFile());
+            if (intent != null) {
+                mContext.startActivity(intent);
+            }
+        }
+
+        @Override
+        public void installApk(@NonNull T info) {
+            Intent intent = getInstallApkIntent(getApkFile(info));
+            if (intent != null) {
+                mContext.startActivity(intent);
+            }
+        }
+
+        protected void configDownloadRequest(@NonNull DownloadManager.Request request, T info) {
+
+        }
+
+        @Nullable
+        @Override
+        public Intent getInstallApkIntent(@Nullable File file) {
+            if (file != null && file.isFile()) {
+                Intent startIntent = new Intent();
+                startIntent.setAction(Intent.ACTION_VIEW);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    startIntent.setFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                }
+                startIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startIntent.setDataAndType(getUriForFile(file), "application/vnd.android.package-archive");
+                return startIntent;
+            } else {
+                return null;
+            }
         }
 
         @Override
@@ -193,7 +260,7 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
                     if (taskId == null) {
                         Uri uri = Uri.parse(info.getApkUrl());
                         DownloadManager.Request request = new DownloadManager.Request(uri);
-                        configDownloadRequest(request);
+                        configDownloadRequest(request, info);
                         request.setMimeType("application/vnd.android.package-archive");
                         taskId = mDownloadManager.enqueue(request);
                         IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
@@ -230,20 +297,6 @@ public abstract class DefaultAppUpdateDelegate<T extends AppUpdateInfo> implemen
             }
         }
 
-        @Override
-        public void installApk() {
-            File file = getNewestApkFile();
-            if (file != null && file.isFile()) {
-                Intent startIntent = new Intent();
-                startIntent.setAction(Intent.ACTION_VIEW);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    startIntent.setFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                }
-                startIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startIntent.setDataAndType(getUriForFile(file), "application/vnd.android.package-archive");
-                mContext.startActivity(startIntent);
-            }
-        }
 
         //        private String getFilePathByTaskId(long id) {
 //            String filePath = null;

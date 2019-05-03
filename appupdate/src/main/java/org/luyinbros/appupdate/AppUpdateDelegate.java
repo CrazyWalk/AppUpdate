@@ -1,7 +1,8 @@
 package org.luyinbros.appupdate;
 
-public interface AppUpdateDelegate<T extends AppUpdateInfo> {
+import android.content.Intent;
 
+public interface AppUpdateDelegate<T extends AppUpdateInfo> {
     AppUpdateSession<T> openSession();
 
     boolean isDownloadingApk();
@@ -10,5 +11,14 @@ public interface AppUpdateDelegate<T extends AppUpdateInfo> {
 
     void unregisterDownloadApkListener(OnDownloadApkListener<T> listener);
 
+    boolean isAllowInstall();
+
+    Intent getRequestInstallPermissionIntent();
+
+    void install(T info);
+
+    void startUpdateInBackground(final T updateInfo);
+
+    void showUpdateDialog(T updateInfo);
 
 }

@@ -6,7 +6,7 @@ public interface OnDownloadApkListener<T extends AppUpdateInfo> {
 
     void onProgress(int progress);
 
-    void onSuccess(@NonNull ApkManager<T> info);
+    void onSuccess(@NonNull ApkManager<T> apkManager);
 
     void onFailure(@NonNull Exception e);
 }
